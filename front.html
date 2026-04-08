@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Battery Carbon Footprint Predictor</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Clash+Display:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:          #04080f;
+    --surface:     #080e18;
+    --card:        #0c1520;
+    --border:      #152030;
+    --border-bright: #1e3048;
+    --cyan:        #00e5ff;
+    --cyan-dim:    rgba(0,229,255,0.12);
+    --cyan-glow:   rgba(0,229,255,0.25);
+    --amber:       #ffaa00;
+    --red:         #ff3b55;
+    --text:        #d6eaf8;
+    --muted:       #3a6080;
+    --muted2:      #254560;
+    --font-head:   'Clash Display', sans-serif;
+    --font-mono:   'DM Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Dot grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle, #1a3050 1px, transparent 1px);
+    background-size: 28px 28px;
+    opacity: 0.5;
+    z-index: 0;
+  }
+
+  /* Top glow */
+  .top-glow {
+    position: fixed;
+    top: -120px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 700px;
+    height: 340px;
+    background: radial-gradient(ellipse, rgba(0,229,255,0.06) 0%, transparent 70%);
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* ── Header ─────────────────────────────────────────────── */
+  header {
+    margin-bottom: 52px;
+    animation: slideDown 0.7s cubic-bezier(0.22,1,0.36,1) both;
+  }
+
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin-bottom: 18px;
+    opacity: 0.8;
+  }
+
+  .dot-blink {
+    width: 5px; height: 5px;
+    background: var(--cyan);
+    border-radius: 50%;
+    animation: blink 1.8s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%,100% { opacity:1; box-shadow: 0 0 6px var(--cyan); }
+    50%      { opacity:0.2; box-shadow: none; }
+  }
+
+  h1 {
+    font-family: var(--font-head);
+    font-size: clamp(38px, 5.5vw, 68px);
+    font-weight: 700;
+    line-height: 1.0;
+    letter-spacing: -0.025em;
+    color: #fff;
+    margin-bottom: 14px;
+  }
+
+  h1 em {
+    font-style: normal;
+    color: var(--cyan);
+  }
+
+  .sub {
+    font-size: 13px;
+    color: var(--muted);
+    max-width: 480px;
+    line-height: 1.7;
+    letter-spacing: 0.01em;
+  }
+
+  /* ── Layout ──────────────────────────────────────────────── */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 20px;
+    align-items: start;
+  }
+
+  @media (max-width: 820px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  /* ── Card ────────────────────────────────────────────────── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+  }
+
+  .card:nth-child(1) { animation: fadeUp 0.6s 0.1s both; }
+  .card:nth-child(2) { animation: fadeUp 0.6s 0.2s both; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .section-label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .section-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── Form grid ───────────────────────────────────────────── */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+  }
+
+  @media (max-width: 560px) {
+    .form-grid { grid-template-columns: 1fr; }
+  }
+
+  .field { display: flex; flex-direction: column; gap: 10px; }
+  .field.span2 { grid-column: 1 / -1; }
+
+  .field-label {
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* Sliders */
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    flex: 1;
+    height: 2px;
+    background: var(--border-bright);
+    border-radius: 99px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--cyan);
+    cursor: pointer;
+    box-shadow: 0 0 0 3px rgba(0,229,255,0.15), 0 0 12px rgba(0,229,255,0.4);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+
+  input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.25);
+    box-shadow: 0 0 0 5px rgba(0,229,255,0.2), 0 0 18px rgba(0,229,255,0.5);
+  }
+
+  .slider-val {
+    font-size: 12px;
+    color: var(--cyan);
+    min-width: 76px;
+    text-align: right;
+  }
+
+  /* Hint row under grid-ci slider */
+  .hint-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 9px;
+    color: var(--muted2);
+    letter-spacing: 0.05em;
+    margin-top: 2px;
+  }
+
+  /* Chip buttons */
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .chip {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border-bright);
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    transition: all 0.18s;
+  }
+
+  .chip:hover { border-color: var(--cyan); color: var(--cyan); }
+
+  .chip.on {
+    background: var(--cyan-dim);
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+
+  /* Predict button */
+  .btn {
+    width: 100%;
+    margin-top: 28px;
+    padding: 15px;
+    background: var(--cyan);
+    color: #04080f;
+    border: none;
+    border-radius: 10px;
+    font-family: var(--font-head);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%);
+    transform: translateX(-100%);
+    transition: transform 0.5s;
+  }
+
+  .btn:hover::after { transform: translateX(100%); }
+  .btn:hover { box-shadow: 0 0 28px var(--cyan-glow); transform: translateY(-1px); }
+  .btn:active { transform: scale(0.99); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* ── Result panel ────────────────────────────────────────── */
+  .result-wrap { position: sticky; top: 24px; }
+
+  /* Big CO2 display */
+  .co2-box {
+    text-align: center;
+    padding: 28px 16px 24px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-bright);
+    border-radius: 12px;
+    background: linear-gradient(160deg, rgba(0,229,255,0.04), transparent 60%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .co2-box::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 80%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    opacity: 0.5;
+  }
+
+  .co2-eyebrow {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .co2-num {
+    font-family: var(--font-head);
+    font-size: 54px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    color: var(--cyan);
+    display: block;
+    transition: color 0.4s;
+  }
+
+  .co2-num.warn  { color: var(--amber); }
+  .co2-num.danger { color: var(--red); }
+
+  .co2-unit {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    margin-top: 6px;
+  }
+
+  .rating-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 14px;
+    padding: 5px 14px;
+    border-radius: 99px;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .pill-low    { background: rgba(0,229,255,0.1);  color: var(--cyan);  border: 1px solid rgba(0,229,255,0.25); }
+  .pill-medium { background: rgba(255,170,0,0.1);  color: var(--amber); border: 1px solid rgba(255,170,0,0.25); }
+  .pill-high   { background: rgba(255,59,85,0.1);  color: var(--red);   border: 1px solid rgba(255,59,85,0.25); }
+
+  /* Mini stats */
+  .mini-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .mini-stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+
+  .ms-label {
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+
+  .ms-val {
+    font-family: var(--font-head);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .ms-unit {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 1px;
+  }
+
+  /* Phase breakdown */
+  .phases { display: flex; flex-direction: column; gap: 14px; }
+
+  .phase-row { display: flex; flex-direction: column; gap: 6px; }
+
+  .phase-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .phase-name { color: var(--muted); }
+  .phase-val  { color: var(--text); }
+
+  .bar-bg {
+    height: 3px;
+    background: var(--border);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 0.9s cubic-bezier(0.34,1.2,0.64,1);
+  }
+
+  .bar-mfg { background: var(--red); }
+  .bar-use { background: var(--amber); }
+  .bar-eol { background: var(--cyan); }
+
+  /* Model badge */
+  .model-badge {
+    margin-top: 20px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+  }
+
+  .mb-label { color: var(--muted); letter-spacing: 0.08em; }
+  .mb-val   { color: var(--cyan); font-weight: 500; }
+
+  /* Idle / Loading / Error */
+  .placeholder {
+    text-align: center;
+    padding: 44px 20px;
+    color: var(--muted2);
+  }
+
+  .ph-icon {
+    font-size: 42px;
+    margin-bottom: 14px;
+    display: block;
+    animation: float 3.5s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%,100% { transform: translateY(0); }
+    50%      { transform: translateY(-7px); }
+  }
+
+  .ph-text {
+    font-size: 12px;
+    line-height: 1.7;
+    letter-spacing: 0.04em;
+  }
+
+  .loading-dots span {
+    display: inline-block;
+    animation: dot 1.4s infinite both;
+    font-size: 24px;
+    color: var(--cyan);
+  }
+
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes dot {
+    0%,80%,100% { transform: scale(0); opacity: 0.2; }
+    40%          { transform: scale(1); opacity: 1; }
+  }
+
+  .error-msg {
+    color: var(--red);
+    font-size: 12px;
+    text-align: center;
+    padding: 20px;
+    border: 1px solid rgba(255,59,85,0.2);
+    border-radius: 8px;
+    background: rgba(255,59,85,0.05);
+  }
+
+  .hidden { display: none !important; }
+
+  /* Number count-up */
+  @keyframes popIn {
+    from { transform: scale(0.85); opacity: 0; }
+    to   { transform: scale(1);    opacity: 1; }
+  }
+
+  .co2-num.pop { animation: popIn 0.45s cubic-bezier(0.34,1.56,0.64,1) both; }
+
+  /* Footer */
+  .footer {
+    margin-top: 48px;
+    text-align: center;
+    font-size: 10px;
+    color: var(--muted2);
+    letter-spacing: 0.06em;
+    line-height: 1.9;
+  }
+</style>
+</head>
+<body>
+
+<div class="top-glow"></div>
+
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="eyebrow"><span class="dot-blink"></span> ML-Powered · Gradient Boosting · R² 0.97</div>
+    <h1>Li-ion Battery<br><em>Carbon Footprint</em></h1>
+    <p class="sub">Enter your battery specifications below. The trained ML model predicts total CO₂-equivalent emissions across all lifecycle phases.</p>
+  </header>
+
+  <div class="grid">
+
+    <!-- ── Left: Input Form ─────────────────────────────────── -->
+    <div class="card">
+      <div class="section-label">Battery Specs</div>
+
+      <div class="form-grid">
+
+        <!-- Capacity -->
+        <div class="field span2">
+          <label class="field-label">Capacity (kWh)</label>
+          <div class="slider-row">
+            <input type="range" id="s_capacity" min="1" max="100" value="75" step="0.5"
+                   oninput="sv('capacity_val', this.value + ' kWh')">
+            <span class="slider-val" id="capacity_val">75 kWh</span>
+          </div>
+        </div>
+
+        <!-- Chemistry -->
+        <div class="field">
+          <label class="field-label">Chemistry</label>
+          <div class="chips" id="g_chemistry">
+            <button class="chip on" onclick="pick(this,'g_chemistry')">NMC</button>
+            <button class="chip"    onclick="pick(this,'g_chemistry')">LFP</button>
+            <button class="chip"    onclick="pick(this,'g_chemistry')">NCA</button>
+          </div>
+        </div>
+
+        <!-- Country -->
+        <div class="field">
+          <label class="field-label">Manufacturing Country</label>
+          <div class="chips" id="g_country">
+            <button class="chip on" onclick="pick(this,'g_country')">China</button>
+            <button class="chip"    onclick="pick(this,'g_country')">USA</button>
+            <button class="chip"    onclick="pick(this,'g_country')">Germany</button>
+            <button class="chip"    onclick="pick(this,'g_country')">Norway</button>
+          </div>
+        </div>
+
+        <!-- Cycle Life -->
+        <div class="field">
+          <label class="field-label">Cycle Life</label>
+          <div class="slider-row">
+            <input type="range" id="s_cycle" min="500" max="3000" value="1500" step="50"
+                   oninput="sv('cycle_val', this.value + ' cycles')">
+            <span class="slider-val" id="cycle_val">1500 cycles</span>
+          </div>
+        </div>
+
+        <!-- Depth of Discharge -->
+        <div class="field">
+          <label class="field-label">Depth of Discharge</label>
+          <div class="slider-row">
+            <input type="range" id="s_dod" min="0.5" max="1.0" value="0.9" step="0.01"
+                   oninput="sv('dod_val', Math.round(this.value*100) + '%')">
+            <span class="slider-val" id="dod_val">90%</span>
+          </div>
+        </div>
+
+        <!-- Grid Carbon Intensity -->
+        <div class="field span2">
+          <label class="field-label">Grid Carbon Intensity — where the battery is charged</label>
+          <div class="slider-row">
+            <input type="range" id="s_grid" min="20" max="820" value="400" step="10"
+                   oninput="sv('grid_val', this.value + ' gCO₂/kWh')">
+            <span class="slider-val" id="grid_val">400 gCO₂/kWh</span>
+          </div>
+          <div class="hint-row">
+            <span>🌱 Solar / Wind — 20</span>
+            <span>⚡ Mixed Grid — 400</span>
+            <span>🏭 Coal — 820</span>
+          </div>
+        </div>
+
+        <!-- Annual Energy Use -->
+        <div class="field">
+          <label class="field-label">Annual Energy Use</label>
+          <div class="slider-row">
+            <input type="range" id="s_annual" min="100" max="5000" value="3000" step="50"
+                   oninput="sv('annual_val', this.value + ' kWh/yr')">
+            <span class="slider-val" id="annual_val">3000 kWh/yr</span>
+          </div>
+        </div>
+
+        <!-- Recycling Rate -->
+        <div class="field">
+          <label class="field-label">Recycling Rate</label>
+          <div class="slider-row">
+            <input type="range" id="s_recycle" min="0.1" max="0.95" value="0.6" step="0.01"
+                   oninput="sv('recycle_val', Math.round(this.value*100) + '%')">
+            <span class="slider-val" id="recycle_val">60%</span>
+          </div>
+        </div>
+
+      </div><!-- /form-grid -->
+
+      <button class="btn" id="predictBtn" onclick="runPredict()">
+        ⚡ Predict Carbon Footprint
+      </button>
+
+    </div><!-- /card left -->
+
+    <!-- ── Right: Result Panel ──────────────────────────────── -->
+    <div class="result-wrap">
+      <div class="card">
+        <div class="section-label">Prediction Result</div>
+
+        <!-- Idle -->
+        <div id="stateIdle" class="placeholder">
+          <span class="ph-icon">🔋</span>
+          <div class="ph-text">Configure your battery<br>and hit Predict</div>
+        </div>
+
+        <!-- Loading -->
+        <div id="stateLoading" class="placeholder hidden">
+          <div class="loading-dots">
+            <span>•</span><span>•</span><span>•</span>
+          </div>
+          <div class="ph-text" style="margin-top:12px">Calling ML model...</div>
+        </div>
+
+        <!-- Error -->
+        <div id="stateError" class="hidden">
+          <div class="error-msg" id="errorMsg">Something went wrong.</div>
+        </div>
+
+        <!-- Result -->
+        <div id="stateResult" class="hidden">
+
+          <!-- Big CO2 number -->
+          <div class="co2-box">
+            <div class="co2-eyebrow">Total CO₂-equivalent Footprint</div>
+            <span class="co2-num" id="co2Num">—</span>
+            <div class="co2-unit">kg CO₂-eq</div>
+            <div id="ratingPill" class="rating-pill pill-low">● Low Carbon</div>
+          </div>
+
+          <!-- Mini stats -->
+          <div class="mini-stats">
+            <div class="mini-stat">
+              <div class="ms-label">Lifecycle</div>
+              <div class="ms-val" id="msYears">—</div>
+              <div class="ms-unit">years</div>
+            </div>
+            <div class="mini-stat">
+              <div class="ms-label">CO₂ / kWh</div>
+              <div class="ms-val" id="msPerKwh">—</div>
+              <div class="ms-unit">kg CO₂ per kWh</div>
+            </div>
+          </div>
+
+          <!-- Phase breakdown -->
+          <div class="section-label" style="margin-bottom:16px">Phase Breakdown</div>
+          <div class="phases">
+            <div class="phase-row">
+              <div class="phase-header">
+                <span class="phase-name">🏭 Manufacturing</span>
+                <span class="phase-val" id="pMfg">—</span>
+              </div>
+              <div class="bar-bg"><div class="bar-fill bar-mfg" id="bMfg" style="width:0%"></div></div>
+            </div>
+            <div class="phase-row">
+              <div class="phase-header">
+                <span class="phase-name">⚡ Use Phase</span>
+                <span class="phase-val" id="pUse">—</span>
+              </div>
+              <div class="bar-bg"><div class="bar-fill bar-use" id="bUse" style="width:0%"></div></div>
+            </div>
+            <div class="phase-row">
+              <div class="phase-header">
+                <span class="phase-name">♻️ End of Life</span>
+                <span class="phase-val" id="pEol">—</span>
+              </div>
+              <div class="bar-bg"><div class="bar-fill bar-eol" id="bEol" style="width:0%"></div></div>
+            </div>
+          </div>
+
+          <!-- Model badge -->
+          <div class="model-badge">
+            <span class="mb-label">Model · Gradient Boosting</span>
+            <span class="mb-val" id="mbR2">R² —</span>
+          </div>
+
+        </div><!-- /stateResult -->
+
+      </div><!-- /card right -->
+    </div>
+
+  </div><!-- /grid -->
+
+
+</div><!-- /wrap -->
+
+<script>
+  const API = "http://localhost:5000";   // ← Change this if your backend runs on a different port
+
+  // ── Helpers ────────────────────────────────────────────────
+  function sv(id, txt) { document.getElementById(id).textContent = txt; }
+
+  function pick(el, groupId) {
+    document.querySelectorAll(`#${groupId} .chip`).forEach(c => c.classList.remove('on'));
+    el.classList.add('on');
+  }
+
+  function getChip(groupId) {
+    return document.querySelector(`#${groupId} .chip.on`)?.textContent.trim() || '';
+  }
+
+  function showState(state) {
+    ['stateIdle','stateLoading','stateError','stateResult'].forEach(id => {
+      document.getElementById(id).classList.add('hidden');
+    });
+    document.getElementById(state).classList.remove('hidden');
+  }
+
+  // ── Animate number count-up ────────────────────────────────
+  function countUp(el, target, duration = 700) {
+    el.classList.remove('pop');
+    void el.offsetWidth;   // reflow to restart animation
+    el.classList.add('pop');
+    const start = parseInt(el.textContent.replace(/,/g,'')) || 0;
+    const t0 = performance.now();
+    (function step(now) {
+      const p = Math.min((now - t0) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(start + (target - start) * eased).toLocaleString();
+      if (p < 1) requestAnimationFrame(step);
+    })(performance.now());
+  }
+
+  // ── Main predict ───────────────────────────────────────────
+  async function runPredict() {
+    const btn = document.getElementById('predictBtn');
+    btn.disabled = true;
+    showState('stateLoading');
+
+    const payload = {
+      capacity_kwh:          parseFloat(document.getElementById('s_capacity').value),
+      chemistry:             getChip('g_chemistry'),
+      manufacturing_country: getChip('g_country'),
+      cycle_life:            parseInt(document.getElementById('s_cycle').value),
+      depth_of_discharge:    parseFloat(document.getElementById('s_dod').value),
+      grid_carbon_intensity: parseFloat(document.getElementById('s_grid').value),
+      annual_energy_kwh:     parseFloat(document.getElementById('s_annual').value),
+      recycling_rate:        parseFloat(document.getElementById('s_recycle').value),
+    };
+
+    try {
+      const res  = await fetch(`${API}/predict`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        document.getElementById('errorMsg').textContent =
+          '⚠ ' + (data.error || 'Server error. Is the backend running?');
+        showState('stateError');
+        return;
+      }
+
+      renderResult(data);
+
+    } catch (err) {
+      document.getElementById('errorMsg').textContent =
+        '⚠ Cannot reach backend. Run: python app.py';
+      showState('stateError');
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // ── Render result ──────────────────────────────────────────
+  function renderResult(d) {
+    showState('stateResult');
+
+    // Big number
+    const numEl = document.getElementById('co2Num');
+    numEl.classList.remove('warn','danger');
+    if (d.total_co2_kg > 10000)     numEl.classList.add('danger');
+    else if (d.total_co2_kg > 3000) numEl.classList.add('warn');
+    countUp(numEl, d.total_co2_kg);
+
+    // Rating pill
+    const pill = document.getElementById('ratingPill');
+    if (d.total_co2_kg > 10000) {
+      pill.className = 'rating-pill pill-high';
+      pill.textContent = '● High Carbon';
+    } else if (d.total_co2_kg > 3000) {
+      pill.className = 'rating-pill pill-medium';
+      pill.textContent = '● Medium Carbon';
+    } else {
+      pill.className = 'rating-pill pill-low';
+      pill.textContent = '● Low Carbon';
+    }
+
+    // Mini stats
+    document.getElementById('msYears').textContent   = d.lifecycle_years;
+    document.getElementById('msPerKwh').textContent  = d.co2_per_kwh;
+
+    // Phase values
+    document.getElementById('pMfg').textContent = d.manufacturing_co2.toLocaleString() + ' kg';
+    document.getElementById('pUse').textContent = d.use_co2.toLocaleString() + ' kg';
+    document.getElementById('pEol').textContent = d.eol_co2.toLocaleString() + ' kg';
+
+    // Phase bars (% of total)
+    setTimeout(() => {
+      document.getElementById('bMfg').style.width = (d.manufacturing_co2 / d.total_co2_kg * 100) + '%';
+      document.getElementById('bUse').style.width = (d.use_co2           / d.total_co2_kg * 100) + '%';
+      document.getElementById('bEol').style.width = (d.eol_co2           / d.total_co2_kg * 100) + '%';
+    }, 80);
+
+    // Model R²
+    document.getElementById('mbR2').textContent = 'R² ' + d.model_r2;
+  }
+</script>
+</body>
+</html>
